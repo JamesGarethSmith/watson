@@ -1,0 +1,20 @@
+{
+  "name": "watson",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev --parallel",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "web:dev": "pnpm --filter @watson/web dev",
+    "worker:dev": "pnpm --filter @watson/worker dev"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "turbo": "latest",
+    "typescript": "latest",
+    "vercel": "latest",
+    "wrangler": "latest"
+  }
+}

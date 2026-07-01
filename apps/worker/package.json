@@ -1,0 +1,19 @@
+{
+  "name": "@watson/worker",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@watson/core": "workspace:*",
+    "@watson/db": "workspace:*",
+    "@watson/sources": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest"
+  }
+}
