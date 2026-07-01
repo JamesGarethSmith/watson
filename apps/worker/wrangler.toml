@@ -1,7 +1,8 @@
 name = "watson-worker"
 main = "src/index.ts"
 compatibility_date = "2026-06-30"
+workers_dev = true
+preview_urls = true
 
 [triggers]
 crons = ["0 * * * *"]
-
