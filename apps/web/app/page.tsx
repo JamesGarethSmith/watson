@@ -61,6 +61,49 @@ function metadataString(event: ScheduledEvent, key: string) {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function highlightLabel(event: ScheduledEvent) {
+  if (event.source === "springboks") {
+    return "Springboks";
+  }
+
+  if (event.source !== "premier_league") {
+    return undefined;
+  }
+
+  const teamValues = [
+    metadataString(event, "homeTeamName"),
+    metadataString(event, "homeTeamShortName"),
+    metadataString(event, "homeTeamTla"),
+    metadataString(event, "awayTeamName"),
+    metadataString(event, "awayTeamShortName"),
+    metadataString(event, "awayTeamTla"),
+    event.title
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.toLowerCase());
+
+  const isManchesterUnited = teamValues.some(
+    (value) => value === "mun" || value.includes("manchester united")
+  );
+  const isManchesterCity = teamValues.some(
+    (value) => value === "mci" || value.includes("manchester city")
+  );
+
+  if (isManchesterUnited && isManchesterCity) {
+    return "James & Ewan’s teams";
+  }
+
+  if (isManchesterUnited) {
+    return "James’s team";
+  }
+
+  if (isManchesterCity) {
+    return "Ewan’s team";
+  }
+
+  return undefined;
+}
+
 async function getEvents() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -142,44 +185,54 @@ export default async function HomePage() {
               <div className="day" key={date}>
                 <h2>{formatDate(date)}</h2>
                 <div className="event-list">
-                  {dateEvents.map((event) => (
-                    <article className="event" key={event.id}>
-                      <time dateTime={event.startsAt}>
-                        {formatTime(event.startsAt)}
-                      </time>
-                      <div className="event-details">
-                        <h3>
-                          {event.sourceUrl ? (
-                            <a href={event.sourceUrl}>{event.title}</a>
-                          ) : (
-                            event.title
+                  {dateEvents.map((event) => {
+                    const highlight = highlightLabel(event);
+
+                    return (
+                      <article
+                        className={`event${highlight ? " event-highlighted" : ""}`}
+                        key={event.id}
+                      >
+                        <time dateTime={event.startsAt}>
+                          {formatTime(event.startsAt)}
+                        </time>
+                        <div className="event-details">
+                          {highlight && (
+                            <span className="highlight-label">{highlight}</span>
                           )}
-                        </h3>
-                        <div className="meta">
-                          <span>{sourceLabels[event.source]}</span>
-                          <span>{event.audience.join(", ")}</span>
-                        </div>
-                        {(metadataString(event, "dstvChannels") ||
-                          metadataString(event, "youtubeUrl")) && (
-                          <div className="availability">
-                            {metadataString(event, "dstvChannels") && (
-                              <span>
-                                DStv: {metadataString(event, "dstvChannels")}
-                              </span>
+                          <h3>
+                            {event.sourceUrl ? (
+                              <a href={event.sourceUrl}>{event.title}</a>
+                            ) : (
+                              event.title
                             )}
-                            {metadataString(event, "youtubeUrl") && (
-                              <a href={metadataString(event, "youtubeUrl")}>
-                                Watch on YouTube
-                              </a>
-                            )}
+                          </h3>
+                          <div className="meta">
+                            <span>{sourceLabels[event.source]}</span>
+                            <span>{event.audience.join(", ")}</span>
                           </div>
-                        )}
-                      </div>
-                      <span className={`badge badge-${event.action}`}>
-                        {actionLabels[event.action]}
-                      </span>
-                    </article>
-                  ))}
+                          {(metadataString(event, "dstvChannels") ||
+                            metadataString(event, "youtubeUrl")) && (
+                            <div className="availability">
+                              {metadataString(event, "dstvChannels") && (
+                                <span>
+                                  DStv: {metadataString(event, "dstvChannels")}
+                                </span>
+                              )}
+                              {metadataString(event, "youtubeUrl") && (
+                                <a href={metadataString(event, "youtubeUrl")}>
+                                  Watch on YouTube
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <span className={`badge badge-${event.action}`}>
+                          {actionLabels[event.action]}
+                        </span>
+                      </article>
+                    );
+                  })}
                 </div>
               </div>
             ))}
