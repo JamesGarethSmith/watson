@@ -56,6 +56,11 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
+function metadataString(event: ScheduledEvent, key: string) {
+  const value = event.metadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 async function getEvents() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -154,6 +159,21 @@ export default async function HomePage() {
                           <span>{sourceLabels[event.source]}</span>
                           <span>{event.audience.join(", ")}</span>
                         </div>
+                        {(metadataString(event, "dstvChannels") ||
+                          metadataString(event, "youtubeUrl")) && (
+                          <div className="availability">
+                            {metadataString(event, "dstvChannels") && (
+                              <span>
+                                DStv: {metadataString(event, "dstvChannels")}
+                              </span>
+                            )}
+                            {metadataString(event, "youtubeUrl") && (
+                              <a href={metadataString(event, "youtubeUrl")}>
+                                Watch on YouTube
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <span className={`badge badge-${event.action}`}>
                         {actionLabels[event.action]}

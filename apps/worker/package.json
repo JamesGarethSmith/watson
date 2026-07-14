@@ -11,6 +11,7 @@
   "dependencies": {
     "@watson/core": "workspace:*",
     "@watson/db": "workspace:*",
+    "@watson/enrichers": "workspace:*",
     "@watson/sources": "workspace:*"
   },
   "devDependencies": {

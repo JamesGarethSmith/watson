@@ -69,6 +69,9 @@ importers:
       '@watson/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@watson/enrichers':
+        specifier: workspace:*
+        version: link:../../packages/enrichers
       '@watson/sources':
         specifier: workspace:*
         version: link:../../packages/sources
@@ -84,6 +87,12 @@ importers:
       '@supabase/supabase-js':
         specifier: latest
         version: 2.110.3
+      '@watson/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/enrichers:
+    dependencies:
       '@watson/core':
         specifier: workspace:*
         version: link:../core

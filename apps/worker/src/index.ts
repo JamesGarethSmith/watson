@@ -1,11 +1,13 @@
 import { evaluateCandidate } from "@watson/core";
 import { createWatsonDb } from "@watson/db";
+import { enrichCandidate, getDefaultEnrichers } from "@watson/enrichers";
 import { getDefaultProvidersForConfig } from "@watson/sources";
 
 export interface Env {
   FOOTBALL_DATA_API_TOKEN?: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   SUPABASE_URL: string;
+  YOUTUBE_API_KEY?: string;
 }
 
 export default {
@@ -36,19 +38,54 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 async function runIngestion(env: Env) {
+  const startedAt = Date.now();
+  let discoveredCount = 0;
+  let enrichedCount = 0;
+  let savedCount = 0;
+
+  console.log("Ingestion started");
+
   const db = createWatsonDb({
     supabaseUrl: env.SUPABASE_URL,
     supabaseKey: env.SUPABASE_SERVICE_ROLE_KEY
+  });
+  const enrichers = getDefaultEnrichers({
+    youtubeApiKey: env.YOUTUBE_API_KEY
   });
 
   for (const provider of getDefaultProvidersForConfig({
     footballDataApiToken: env.FOOTBALL_DATA_API_TOKEN
   })) {
     const candidates = await provider.discover();
+    discoveredCount += candidates.length;
+    console.log(`Provider ${provider.name}: ${candidates.length} candidates`);
 
     for (const candidate of candidates) {
-      const decision = evaluateCandidate(candidate);
-      await db.saveEventCandidate(candidate, decision);
+      const enrichedCandidate = await enrichCandidate(
+        candidate,
+        enrichers,
+        (enricher, error) => {
+          console.error(`Enricher ${enricher.name} failed for ${candidate.id}`, error);
+        }
+      );
+      if (hasNewMetadata(candidate, enrichedCandidate)) {
+        enrichedCount += 1;
+        console.log(`Enriched ${candidate.id}: ${candidate.title}`);
+      }
+      const decision = evaluateCandidate(enrichedCandidate);
+      await db.saveEventCandidate(enrichedCandidate, decision);
+      savedCount += 1;
     }
   }
+
+  console.log(
+    `Ingestion complete: ${discoveredCount} discovered, ${enrichedCount} enriched, ${savedCount} saved in ${Date.now() - startedAt}ms`
+  );
+}
+
+function hasNewMetadata(
+  original: { metadata?: Record<string, unknown> },
+  enriched: { metadata?: Record<string, unknown> }
+) {
+  return JSON.stringify(original.metadata ?? {}) !== JSON.stringify(enriched.metadata ?? {});
 }

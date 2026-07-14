@@ -164,6 +164,31 @@ h1 {
   margin-right: 18px;
 }
 
+.availability {
+  align-items: center;
+  color: #52655e;
+  display: flex;
+  font-size: 13px;
+  gap: 18px;
+  margin-top: 8px;
+}
+
+.availability a {
+  color: #b1482b;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.availability a:hover {
+  text-decoration: underline;
+}
+
+.availability > * + *::before {
+  color: #718079;
+  content: "·";
+  margin-right: 18px;
+}
+
 .badge {
   border-radius: 999px;
   font-size: 11px;
