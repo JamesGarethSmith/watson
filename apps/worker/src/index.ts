@@ -1,8 +1,9 @@
 import { evaluateCandidate } from "@watson/core";
 import { createWatsonDb } from "@watson/db";
-import { getDefaultProviders } from "@watson/sources";
+import { getDefaultProvidersForConfig } from "@watson/sources";
 
 export interface Env {
+  FOOTBALL_DATA_API_TOKEN?: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   SUPABASE_URL: string;
 }
@@ -40,7 +41,9 @@ async function runIngestion(env: Env) {
     supabaseKey: env.SUPABASE_SERVICE_ROLE_KEY
   });
 
-  for (const provider of getDefaultProviders()) {
+  for (const provider of getDefaultProvidersForConfig({
+    footballDataApiToken: env.FOOTBALL_DATA_API_TOKEN
+  })) {
     const candidates = await provider.discover();
 
     for (const candidate of candidates) {

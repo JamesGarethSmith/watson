@@ -16,7 +16,7 @@ Google Calendar remains the source of truth. Watson discovers events, filters th
 - Cloudflare Cron Triggers
 - Supabase for Postgres, Auth, and generated API
 - Google Calendar API for calendar output
-- YouTube API for livestream/premiere sources
+- YouTube API for livestream/premiere enrichment
 
 ## Monorepo shape
 
@@ -42,10 +42,14 @@ Source provider
 
 ## Initial providers
 
-- YouTubeProvider
 - SpringboksProvider
 - PremierLeagueProvider
 - ManualProvider
+
+Future enrichers:
+
+- YouTubeEnricher
+- DSTVEnricher
 
 Avoid scraping unless necessary. Prefer official APIs, official fixture pages, RSS, ICS, or structured data.
 
@@ -77,7 +81,7 @@ Use real hosted services for development where practical:
 
 - real Supabase project
 - real Google Calendar test calendar
-- real YouTube API
+- real YouTube API when livestream enrichment is introduced
 - local Vercel/Next.js dev
 - local Cloudflare Worker dev
 

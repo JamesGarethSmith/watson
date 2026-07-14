@@ -5,4 +5,4 @@ workers_dev = true
 preview_urls = true
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 6 * * *"]

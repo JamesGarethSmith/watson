@@ -5,7 +5,8 @@ export type Importance = "must_watch" | "nice_to_watch" | "ignore";
 export type EventAction = "auto_add" | "suggest" | "ignore";
 
 export type EventSource =
-  | "youtube"
+  | "crossfit_games"
+  | "magic_pro_tour"
   | "springboks"
   | "premier_league"
   | "manual";
@@ -63,4 +64,3 @@ function isSpringboksForEwan(candidate: EventCandidate) {
     normaliseTitle(candidate.title).toLowerCase().includes("springboks")
   );
 }
-
