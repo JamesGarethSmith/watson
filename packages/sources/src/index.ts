@@ -1,15 +1,18 @@
 import {
   normaliseTitle,
+  type EnricherName,
   type EventCandidate
 } from "@watson/core";
 
 export interface SourceProvider {
   readonly name: string;
+  readonly enrichers: readonly EnricherName[];
   discover(): Promise<EventCandidate[]>;
 }
 
 export class ManualProvider implements SourceProvider {
   readonly name = "manual";
+  readonly enrichers = ["youtube", "dstv"] as const;
 
   async discover(): Promise<EventCandidate[]> {
     return [];
@@ -18,6 +21,7 @@ export class ManualProvider implements SourceProvider {
 
 export class SpringboksProvider implements SourceProvider {
   readonly name = "springboks";
+  readonly enrichers = ["dstv"] as const;
 
   constructor(
     private readonly options: {
@@ -50,6 +54,7 @@ export class SpringboksProvider implements SourceProvider {
 
 export class PremierLeagueProvider implements SourceProvider {
   readonly name = "premier_league";
+  readonly enrichers = ["dstv"] as const;
 
   constructor(
     private readonly options: {
@@ -104,6 +109,7 @@ export class PremierLeagueProvider implements SourceProvider {
 
 export class CrossFitGamesProvider implements SourceProvider {
   readonly name = "crossfit_games";
+  readonly enrichers = ["youtube"] as const;
 
   constructor(
     private readonly options: {
@@ -139,6 +145,7 @@ export class CrossFitGamesProvider implements SourceProvider {
 
 export class MagicProTourProvider implements SourceProvider {
   readonly name = "magic_pro_tour";
+  readonly enrichers = ["youtube"] as const;
 
   constructor(
     private readonly options: {
@@ -429,7 +436,7 @@ export function parseMagicProTourSchedule(
   const candidates = (data.items ?? [])
     .filter((event) => isMagicProTourEvent(event, eventTypesById))
     .filter((event) => isUpcomingContentfulEvent(event, now))
-    .map((event) => toMagicProTourCandidate(event, sourceUrl));
+    .flatMap((event) => toMagicProTourCandidates(event, sourceUrl));
 
   return dedupeCandidates(candidates);
 }
@@ -456,36 +463,58 @@ function isUpcomingContentfulEvent(event: ContentfulScheduleEvent, now: Date) {
   return Number.isFinite(endsAt.getTime()) && endsAt >= now;
 }
 
-function toMagicProTourCandidate(
+function toMagicProTourCandidates(
   event: ContentfulScheduleEvent,
   sourceUrl: string
-): EventCandidate {
+): EventCandidate[] {
   const title = normaliseTitle(
     event.fields?.eventName ?? event.fields?.entryTitle ?? "Magic Pro Tour"
   );
-  const startsAt = new Date(event.fields?.startTime ?? "").toISOString();
-  const endsAt = event.fields?.endTime
-    ? new Date(event.fields.endTime).toISOString()
+  const eventStart = new Date(event.fields?.startTime ?? "");
+  const eventEnd = event.fields?.endTime
+    ? new Date(event.fields.endTime)
     : undefined;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const durationMs = eventEnd
+    ? Math.max(0, eventEnd.getTime() - eventStart.getTime())
+    : 0;
+  const dayCount = durationMs > dayMs ? Math.floor(durationMs / dayMs) + 1 : 1;
+  const dailyDurationMs = eventEnd
+    ? Math.max(0, durationMs - (dayCount - 1) * dayMs)
+    : undefined;
+  const contentfulId =
+    event.sys?.id ?? slugify(`${title}:${eventStart.toISOString()}`);
 
-  return {
-    id: `magic_pro_tour:${event.sys?.id ?? slugify(`${title}:${startsAt}`)}`,
-    title,
-    startsAt,
-    endsAt,
-    source: "magic_pro_tour",
-    sourceUrl: event.fields?.link ?? sourceUrl,
-    audience: ["Family"],
-    metadata: {
-      contentfulId: event.sys?.id ?? null,
-      location: event.fields?.location ?? null,
-      year: event.fields?.year ?? null,
-      month: event.fields?.month ?? null,
-      dates: event.fields?.dates ?? null,
-      gameType: event.fields?.gameType ?? null,
-      scheduleUrl: sourceUrl
-    }
-  };
+  return Array.from({ length: dayCount }, (_, dayIndex) => {
+    const dayStart = new Date(eventStart.getTime() + dayIndex * dayMs);
+    const dayEnd =
+      dailyDurationMs === undefined
+        ? undefined
+        : new Date(dayStart.getTime() + dailyDurationMs);
+
+    return {
+      id: `magic_pro_tour:${contentfulId}${
+        dayIndex === 0 ? "" : `:day-${dayIndex + 1}`
+      }`,
+      title,
+      startsAt: dayStart.toISOString(),
+      endsAt: dayEnd?.toISOString(),
+      source: "magic_pro_tour",
+      sourceUrl: event.fields?.link ?? sourceUrl,
+      audience: ["Family"],
+      metadata: {
+        contentfulId: event.sys?.id ?? null,
+        eventDay: dayIndex + 1,
+        eventDayCount: dayCount,
+        location: event.fields?.location ?? null,
+        year: event.fields?.year ?? null,
+        month: event.fields?.month ?? null,
+        dates: event.fields?.dates ?? null,
+        gameType: event.fields?.gameType ?? null,
+        scheduleUrl: sourceUrl
+      }
+    };
+  });
 }
 
 function isCurrentCrossFitGamesCompetition(competition: CrossFitCompetition) {

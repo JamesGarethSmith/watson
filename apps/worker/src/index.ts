@@ -58,12 +58,17 @@ async function runIngestion(env: Env) {
   })) {
     const candidates = await provider.discover();
     discoveredCount += candidates.length;
-    console.log(`Provider ${provider.name}: ${candidates.length} candidates`);
+    const providerEnrichers = enrichers.filter((enricher) =>
+      provider.enrichers.includes(enricher.name)
+    );
+    console.log(
+      `Provider ${provider.name}: ${candidates.length} candidates; enrichers: ${provider.enrichers.join(", ") || "none"}`
+    );
 
     for (const candidate of candidates) {
       const enrichedCandidate = await enrichCandidate(
         candidate,
-        enrichers,
+        providerEnrichers,
         (enricher, error) => {
           console.error(`Enricher ${enricher.name} failed for ${candidate.id}`, error);
         }

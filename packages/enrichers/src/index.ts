@@ -1,7 +1,11 @@
-import { normaliseTitle, type EventCandidate } from "@watson/core";
+import {
+  normaliseTitle,
+  type EnricherName,
+  type EventCandidate
+} from "@watson/core";
 
 export interface EventEnricher {
-  readonly name: string;
+  readonly name: EnricherName;
   enrich(candidate: EventCandidate): Promise<EventCandidate>;
 }
 
@@ -183,6 +187,7 @@ interface TimedItem {
   channelTitle?: string;
   channels?: string[];
   isLive?: boolean;
+  matchText?: string;
 }
 
 interface YouTubeSearchResponse {
@@ -209,7 +214,7 @@ function findBestTimedMatch<T extends TimedItem>(
     .map((item) => ({
       item,
       timeDifference: Math.abs(new Date(item.startsAt).getTime() - candidateTime),
-      titleScore: titleSimilarity(candidate.title, item.title)
+      titleScore: titleSimilarity(candidate.title, item.matchText ?? item.title)
     }))
     .filter(({ timeDifference, titleScore }) =>
       Number.isFinite(timeDifference) &&
@@ -252,8 +257,9 @@ const STOP_WORDS = new Set(["live", "the", "and", "from", "official", "stream"])
 
 function extractBroadcasts(payload: unknown): TimedItem[] {
   const records = findRecordArray(payload);
-  return records.flatMap((record) => {
+  const broadcasts = records.flatMap((record) => {
     const title = stringValue(record.title) ?? stringValue(record.name);
+    const synopsis = stringValue(record.synopsis);
     const startsAt =
       stringValue(record.utcStart) ??
       stringValue(record.startTime) ??
@@ -268,19 +274,49 @@ function extractBroadcasts(payload: unknown): TimedItem[] {
     const channels = rawChannels.flatMap((channel) => {
       if (typeof channel === "string") return [channel];
       if (!isRecord(channel)) return [];
-      return [stringValue(channel.name) ?? stringValue(channel.channelName)].filter(
-        (value): value is string => Boolean(value)
-      );
+      const name = stringValue(channel.name) ?? stringValue(channel.channelName);
+      if (!name) return [];
+
+      const number =
+        typeof channel.channelNumber === "number" ||
+        typeof channel.channelNumber === "string"
+          ? String(channel.channelNumber)
+          : undefined;
+      return [number ? `${name} (${number})` : name];
     });
 
     return [{
       title,
+      matchText: `${title} ${synopsis ?? ""}`,
       startsAt,
       endsAt: stringValue(record.utcEnd) ?? stringValue(record.endTime),
       channels,
       isLive: typeof record.isLive === "boolean" ? record.isLive : undefined
     }];
   });
+
+  return mergeBroadcastChannels(broadcasts);
+}
+
+function mergeBroadcastChannels(broadcasts: TimedItem[]) {
+  const merged = new Map<string, TimedItem>();
+
+  for (const broadcast of broadcasts) {
+    const key = [broadcast.title, broadcast.startsAt, broadcast.endsAt ?? ""].join("|");
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, broadcast);
+      continue;
+    }
+
+    merged.set(key, {
+      ...existing,
+      channels: [...new Set([...(existing.channels ?? []), ...(broadcast.channels ?? [])])],
+      isLive: existing.isLive || broadcast.isLive
+    });
+  }
+
+  return [...merged.values()];
 }
 
 function findRecordArray(payload: unknown): Record<string, unknown>[] {

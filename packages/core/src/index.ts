@@ -11,6 +11,8 @@ export type EventSource =
   | "premier_league"
   | "manual";
 
+export type EnricherName = "youtube" | "dstv";
+
 export interface EventCandidate {
   id: string;
   title: string;
