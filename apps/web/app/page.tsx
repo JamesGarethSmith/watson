@@ -15,12 +15,6 @@ const sourceLabels: Record<ScheduledEvent["source"], string> = {
   manual: "Manual"
 };
 
-const actionLabels: Record<ScheduledEvent["action"], string> = {
-  auto_add: "Auto-add",
-  suggest: "Suggested",
-  ignore: "Ignored"
-};
-
 function dateKey(event: ScheduledEvent) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -187,6 +181,8 @@ export default async function HomePage() {
                 <div className="event-list">
                   {dateEvents.map((event) => {
                     const highlight = highlightLabel(event);
+                    const dstvChannels = metadataString(event, "dstvChannels");
+                    const youtubeUrl = metadataString(event, "youtubeUrl");
 
                     return (
                       <article
@@ -211,25 +207,37 @@ export default async function HomePage() {
                             <span>{sourceLabels[event.source]}</span>
                             <span>{event.audience.join(", ")}</span>
                           </div>
-                          {(metadataString(event, "dstvChannels") ||
-                            metadataString(event, "youtubeUrl")) && (
+                          {(dstvChannels || youtubeUrl) && (
                             <div className="availability">
-                              {metadataString(event, "dstvChannels") && (
-                                <span>
-                                  DStv: {metadataString(event, "dstvChannels")}
-                                </span>
+                              {dstvChannels && (
+                                <span>DStv: {dstvChannels}</span>
                               )}
-                              {metadataString(event, "youtubeUrl") && (
-                                <a href={metadataString(event, "youtubeUrl")}>
-                                  Watch on YouTube
-                                </a>
+                              {youtubeUrl && (
+                                <a href={youtubeUrl}>Watch on YouTube</a>
                               )}
                             </div>
                           )}
                         </div>
-                        <span className={`badge badge-${event.action}`}>
-                          {actionLabels[event.action]}
-                        </span>
+                        {dstvChannels ? (
+                          <div
+                            className="service-mark supersport-mark"
+                            aria-label="Available on SuperSport"
+                          >
+                            <span className="supersport-symbol">S</span>
+                            <span>SuperSport</span>
+                          </div>
+                        ) : youtubeUrl ? (
+                          <div
+                            className="service-mark youtube-mark"
+                            aria-label="Available on YouTube"
+                          >
+                            <svg viewBox="0 0 28 20" aria-hidden="true">
+                              <rect width="28" height="20" rx="5" />
+                              <path d="M11 6l7 4-7 4z" />
+                            </svg>
+                            <span>YouTube</span>
+                          </div>
+                        ) : null}
                       </article>
                     );
                   })}

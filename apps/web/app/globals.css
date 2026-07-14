@@ -206,29 +206,48 @@ h1 {
   margin-right: 18px;
 }
 
-.badge {
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.04em;
-  padding: 7px 10px;
-  text-transform: uppercase;
+.service-mark {
+  align-items: center;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  gap: 7px;
   white-space: nowrap;
 }
 
-.badge-auto_add {
-  background: #d9eadb;
-  color: #236032;
+.youtube-mark {
+  color: #181818;
 }
 
-.badge-suggest {
-  background: #f0dfba;
-  color: #775512;
+.youtube-mark svg {
+  height: 18px;
+  width: 25px;
 }
 
-.badge-ignore {
-  background: #e4e5e1;
-  color: #686e69;
+.youtube-mark rect {
+  fill: #ff0033;
+}
+
+.youtube-mark path {
+  fill: #fff;
+}
+
+.supersport-mark {
+  color: #172c3f;
+  font-style: italic;
+}
+
+.supersport-symbol {
+  align-items: center;
+  background: linear-gradient(135deg, #ec1c2e 0 48%, #1676bc 52% 100%);
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  font-size: 12px;
+  font-style: normal;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
 }
 
 .notice {
@@ -353,7 +372,7 @@ h1 {
     grid-template-columns: 52px minmax(0, 1fr);
   }
 
-  .badge {
+  .service-mark {
     grid-column: 2;
     justify-self: start;
   }
