@@ -4,6 +4,7 @@
 .wrangler
 **/.wrangler
 node_modules
+.pnpm-store
 dist
 **/dist
 .next
