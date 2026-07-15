@@ -9,6 +9,7 @@ export type EventSource =
   | "magic_pro_tour"
   | "springboks"
   | "premier_league"
+  | "champions_league"
   | "manual";
 
 export type EnricherName = "youtube" | "dstv";

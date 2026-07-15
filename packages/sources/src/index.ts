@@ -107,6 +107,61 @@ export class PremierLeagueProvider implements SourceProvider {
   }
 }
 
+export class ChampionsLeagueProvider implements SourceProvider {
+  readonly name = "champions_league";
+  readonly enrichers = ["dstv"] as const;
+
+  constructor(
+    private readonly options: {
+      apiToken?: string;
+      baseUrl?: string;
+      competitionCode?: string;
+      fetcher?: typeof fetch;
+      lookaheadDays?: number;
+      now?: () => Date;
+      sourceUrl?: string;
+    } = {}
+  ) {}
+
+  async discover(): Promise<EventCandidate[]> {
+    if (!this.options.apiToken) {
+      return [];
+    }
+
+    const now = this.options.now?.() ?? new Date();
+    const dateFrom = toDateOnly(now);
+    const dateTo = toDateOnly(addDays(now, this.options.lookaheadDays ?? 120));
+    const competitionCode = this.options.competitionCode ?? "CL";
+    const url = new URL(
+      `${this.options.baseUrl ?? "https://api.football-data.org/v4"}/competitions/${competitionCode}/matches`
+    );
+
+    url.searchParams.set("dateFrom", dateFrom);
+    url.searchParams.set("dateTo", dateTo);
+    url.searchParams.set("status", "SCHEDULED");
+
+    const fetcher = this.options.fetcher ?? fetch;
+    const response = await fetcher(url, {
+      headers: {
+        "X-Auth-Token": this.options.apiToken
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch Champions League fixtures: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const data = (await response.json()) as FootballDataMatchesResponse;
+    return parseChampionsLeagueMatches(
+      data,
+      this.options.sourceUrl ?? "https://www.football-data.org/",
+      now
+    );
+  }
+}
+
 export class CrossFitGamesProvider implements SourceProvider {
   readonly name = "crossfit_games";
   readonly enrichers = ["youtube"] as const;
@@ -199,6 +254,7 @@ export function getDefaultProviders(): SourceProvider[] {
     new SpringboksProvider(),
     new CrossFitGamesProvider(),
     new PremierLeagueProvider(),
+    new ChampionsLeagueProvider(),
     new MagicProTourProvider(),
     new ManualProvider()
   ];
@@ -211,6 +267,9 @@ export function getDefaultProvidersForConfig(config: {
     new SpringboksProvider(),
     new CrossFitGamesProvider(),
     new PremierLeagueProvider({
+      apiToken: config.footballDataApiToken
+    }),
+    new ChampionsLeagueProvider({
       apiToken: config.footballDataApiToken
     }),
     new MagicProTourProvider(),
@@ -345,7 +404,33 @@ export function parsePremierLeagueMatches(
 ): EventCandidate[] {
   const candidates = (data.matches ?? [])
     .filter((match) => isUpcomingFootballMatch(match, now))
-    .map((match) => toPremierLeagueCandidate(match, data.competition, sourceUrl));
+    .map((match) =>
+      toFootballCandidate(
+        match,
+        data.competition,
+        sourceUrl,
+        "premier_league"
+      )
+    );
+
+  return dedupeCandidates(candidates);
+}
+
+export function parseChampionsLeagueMatches(
+  data: FootballDataMatchesResponse,
+  sourceUrl: string,
+  now: Date
+): EventCandidate[] {
+  const candidates = (data.matches ?? [])
+    .filter((match) => isUpcomingFootballMatch(match, now))
+    .map((match) =>
+      toFootballCandidate(
+        match,
+        data.competition,
+        sourceUrl,
+        "champions_league"
+      )
+    );
 
   return dedupeCandidates(candidates);
 }
@@ -366,20 +451,21 @@ function isUpcomingFootballMatch(match: FootballDataMatch, now: Date) {
   );
 }
 
-function toPremierLeagueCandidate(
+function toFootballCandidate(
   match: FootballDataMatch,
   competition: FootballDataMatchesResponse["competition"],
-  sourceUrl: string
+  sourceUrl: string,
+  source: "premier_league" | "champions_league"
 ): EventCandidate {
   const homeTeam = match.homeTeam?.name ?? "TBD";
   const awayTeam = match.awayTeam?.name ?? "TBD";
   const startsAt = new Date(match.utcDate ?? "").toISOString();
 
   return {
-    id: `premier_league:${match.id ?? slugify(`${homeTeam}:${awayTeam}:${startsAt}`)}`,
+    id: `${source}:${match.id ?? slugify(`${homeTeam}:${awayTeam}:${startsAt}`)}`,
     title: normaliseTitle(`${homeTeam} v ${awayTeam}`),
     startsAt,
-    source: "premier_league",
+    source,
     sourceUrl,
     audience: ["Family"],
     metadata: {
@@ -438,7 +524,36 @@ export function parseMagicProTourSchedule(
     .filter((event) => isUpcomingContentfulEvent(event, now))
     .flatMap((event) => toMagicProTourCandidates(event, sourceUrl));
 
-  return dedupeCandidates(candidates);
+  return dedupeMagicProTourDays(candidates);
+}
+
+function dedupeMagicProTourDays(candidates: EventCandidate[]) {
+  const candidatesByDay = new Map<string, EventCandidate>();
+
+  for (const candidate of candidates) {
+    const day = candidate.startsAt.slice(0, 10);
+    const key = `${normaliseTitle(candidate.title).toLowerCase()}:${day}`;
+    const existing = candidatesByDay.get(key);
+
+    // Magic's schedule can contain both a multi-day tournament entry and
+    // individual broadcast entries. Prefer the individual entry; it has the
+    // authoritative start/end time for that day's coverage.
+    if (
+      !existing ||
+      magicEventDayCount(candidate) < magicEventDayCount(existing)
+    ) {
+      candidatesByDay.set(key, candidate);
+    }
+  }
+
+  return [...candidatesByDay.values()].sort((left, right) =>
+    left.startsAt.localeCompare(right.startsAt)
+  );
+}
+
+function magicEventDayCount(candidate: EventCandidate) {
+  const dayCount = candidate.metadata?.eventDayCount;
+  return typeof dayCount === "number" ? dayCount : Number.POSITIVE_INFINITY;
 }
 
 function isMagicProTourEvent(

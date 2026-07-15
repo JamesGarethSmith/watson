@@ -12,6 +12,7 @@ const sourceLabels: Record<ScheduledEvent["source"], string> = {
   magic_pro_tour: "Magic Pro Tour",
   springboks: "Springboks",
   premier_league: "Premier League",
+  champions_league: "Champions League",
   manual: "Manual"
 };
 
@@ -60,7 +61,7 @@ function highlightLabel(event: ScheduledEvent) {
     return "Springboks";
   }
 
-  if (event.source !== "premier_league") {
+  if (!["premier_league", "champions_league"].includes(event.source)) {
     return undefined;
   }
 
