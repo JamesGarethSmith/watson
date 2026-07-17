@@ -608,9 +608,7 @@ function toMagicProTourCandidates(
         : new Date(dayStart.getTime() + dailyDurationMs);
 
     return {
-      id: `magic_pro_tour:${contentfulId}${
-        dayIndex === 0 ? "" : `:day-${dayIndex + 1}`
-      }`,
+      id: `magic_pro_tour:${contentfulId}:day-${dayIndex + 1}`,
       title,
       startsAt: dayStart.toISOString(),
       endsAt: dayEnd?.toISOString(),

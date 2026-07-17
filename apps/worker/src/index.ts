@@ -56,7 +56,17 @@ async function runIngestion(env: Env) {
   for (const provider of getDefaultProvidersForConfig({
     footballDataApiToken: env.FOOTBALL_DATA_API_TOKEN
   })) {
-    const candidates = await provider.discover();
+    let candidates;
+
+    try {
+      candidates = await provider.discover();
+    } catch (error) {
+      logIngestionError("provider_discovery", error, {
+        provider: provider.name
+      });
+      throw error;
+    }
+
     discoveredCount += candidates.length;
     const providerEnrichers = enrichers.filter((enricher) =>
       provider.enrichers.includes(enricher.name)
@@ -70,7 +80,11 @@ async function runIngestion(env: Env) {
         candidate,
         providerEnrichers,
         (enricher, error) => {
-          console.error(`Enricher ${enricher.name} failed for ${candidate.id}`, error);
+          logIngestionError("candidate_enrichment", error, {
+            provider: provider.name,
+            enricher: enricher.name,
+            candidateId: candidate.id
+          });
         }
       );
       if (hasNewMetadata(candidate, enrichedCandidate)) {
@@ -78,7 +92,17 @@ async function runIngestion(env: Env) {
         console.log(`Enriched ${candidate.id}: ${candidate.title}`);
       }
       const decision = evaluateCandidate(enrichedCandidate);
-      await db.saveEventCandidate(enrichedCandidate, decision);
+
+      try {
+        await db.saveEventCandidate(enrichedCandidate, decision);
+      } catch (error) {
+        logIngestionError("candidate_save", error, {
+          provider: provider.name,
+          candidateId: candidate.id
+        });
+        throw error;
+      }
+
       savedCount += 1;
     }
   }
@@ -86,6 +110,46 @@ async function runIngestion(env: Env) {
   console.log(
     `Ingestion complete: ${discoveredCount} discovered, ${enrichedCount} enriched, ${savedCount} saved in ${Date.now() - startedAt}ms`
   );
+}
+
+function logIngestionError(
+  stage: string,
+  error: unknown,
+  context: Record<string, string>
+) {
+  console.error({
+    event: "ingestion_error",
+    stage,
+    ...context,
+    error: serialiseError(error)
+  });
+}
+
+function serialiseError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const value = error as Record<string, unknown>;
+
+    return {
+      name: "NonErrorThrown",
+      message: typeof value.message === "string" ? value.message : String(error),
+      ...(typeof value.code === "string" ? { code: value.code } : {}),
+      ...(typeof value.details === "string" ? { details: value.details } : {}),
+      ...(typeof value.hint === "string" ? { hint: value.hint } : {})
+    };
+  }
+
+  return {
+    name: "NonErrorThrown",
+    message: String(error)
+  };
 }
 
 function hasNewMetadata(
