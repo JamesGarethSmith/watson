@@ -168,7 +168,7 @@ export class CrossFitGamesProvider implements SourceProvider {
 
   constructor(
     private readonly options: {
-      competitionsUrl?: string;
+      cmsUrl?: string;
       fetcher?: typeof fetch;
       now?: () => Date;
       sourceUrl?: string;
@@ -176,20 +176,21 @@ export class CrossFitGamesProvider implements SourceProvider {
   ) {}
 
   async discover(): Promise<EventCandidate[]> {
-    const competitionsUrl =
-      this.options.competitionsUrl ??
-      "https://c3po.crossfit.com/api/competitions/v1/competitions/finals";
+    const cmsUrl = new URL(
+      this.options.cmsUrl ?? "https://cms-api.crossfit.com/tiles"
+    );
+    cmsUrl.searchParams.set("full_path", "/games/finals/schedule");
     const fetcher = this.options.fetcher ?? fetch;
-    const response = await fetcher(competitionsUrl);
+    const response = await fetcher(cmsUrl);
 
     if (!response.ok) {
       throw new Error(
-        `Failed to fetch CrossFit Games competition metadata: ${response.status} ${response.statusText}`
+        `Failed to fetch CrossFit Games schedule: ${response.status} ${response.statusText}`
       );
     }
 
-    const data = (await response.json()) as CrossFitCompetition[];
-    return parseCrossFitGamesCompetitions(
+    const data = (await response.json()) as CrossFitScheduleResponse;
+    return parseCrossFitGamesSchedule(
       data,
       this.options.sourceUrl ??
         "https://games.crossfit.com/finals/schedule?type=individuals",
@@ -298,18 +299,33 @@ interface JsonLdSportsEvent {
   };
 }
 
-interface CrossFitCompetition {
-  id?: number;
-  identifier?: string;
+interface CrossFitScheduleResponse {
+  tiles?: Array<{
+    acf?: {
+      components?: Array<{
+        acf_fc_layout?: string;
+        schedule_component?: {
+          schedules?: CrossFitSchedule[];
+        };
+      }>;
+    };
+  }>;
+}
+
+interface CrossFitSchedule {
   name?: string;
-  slug?: string;
-  year?: number;
-  active?: boolean;
+  competition_identifier?: string;
+  blocks?: Array<{
+    items?: CrossFitScheduleItem[];
+  }>;
+}
+
+interface CrossFitScheduleItem {
   type?: string;
   start_date?: string;
   end_date?: string;
-  competition_name?: string;
-  competition_name_short?: string;
+  headline_text?: string;
+  location_text?: string;
 }
 
 interface FootballDataMatchesResponse {
@@ -491,17 +507,105 @@ function toFootballCandidate(
   };
 }
 
-export function parseCrossFitGamesCompetitions(
-  competitions: CrossFitCompetition[],
+export function parseCrossFitGamesSchedule(
+  data: CrossFitScheduleResponse,
   sourceUrl: string,
   now: Date
 ): EventCandidate[] {
-  const candidates = competitions
-    .filter(isCurrentCrossFitGamesCompetition)
-    .filter((competition) => isCurrentOrFutureCompetition(competition, now))
-    .map((competition) => toCrossFitGamesCandidate(competition, sourceUrl));
+  const schedules = (data.tiles ?? []).flatMap((tile) =>
+    (tile.acf?.components ?? []).flatMap(
+      (component) => component.schedule_component?.schedules ?? []
+    )
+  );
+  const schedule = schedules.find(
+    (candidate) => candidate.name?.toLowerCase() === "individuals"
+  );
 
-  return dedupeCandidates(candidates);
+  if (!schedule) {
+    return [];
+  }
+
+  const events = (schedule.blocks ?? [])
+    .flatMap((block) => block.items ?? [])
+    .map(toDatedCrossFitScheduleItem)
+    .filter((item): item is DatedCrossFitScheduleItem => item !== undefined);
+
+  if (events.length === 0) {
+    return [];
+  }
+
+  const startsAt = new Date(
+    Math.min(...events.map((event) => event.startsAt.getTime()))
+  );
+  const endsAt = new Date(
+    Math.max(...events.map((event) => event.endsAt.getTime()))
+  );
+
+  if (endsAt < now) {
+    return [];
+  }
+
+  const year = startsAt.getUTCFullYear();
+  const locations = [
+    ...new Set(
+      events
+        .map((event) => event.location)
+        .filter((location): location is string => Boolean(location))
+        .map((location) => location.trim())
+    )
+  ];
+
+  return [
+    {
+      id: `crossfit_games:${year}`,
+      title: normaliseTitle(`${year} CrossFit Games`),
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      source: "crossfit_games",
+      sourceUrl,
+      audience: ["Family"],
+      metadata: {
+        year,
+        competitionIdentifier: schedule.competition_identifier ?? null,
+        eventCount: events.length,
+        locations: locations.join("; ")
+      }
+    }
+  ];
+}
+
+interface DatedCrossFitScheduleItem {
+  startsAt: Date;
+  endsAt: Date;
+  location?: string;
+}
+
+function toDatedCrossFitScheduleItem(
+  item: CrossFitScheduleItem
+): DatedCrossFitScheduleItem | undefined {
+  if (!item.start_date) {
+    return undefined;
+  }
+
+  const startsAt = new Date(item.start_date);
+  const parsedEndsAt = item.end_date ? new Date(item.end_date) : undefined;
+
+  if (!Number.isFinite(startsAt.getTime())) {
+    return undefined;
+  }
+
+  const endsAt =
+    parsedEndsAt &&
+    Number.isFinite(parsedEndsAt.getTime()) &&
+    parsedEndsAt >= startsAt
+      ? parsedEndsAt
+      : startsAt;
+
+  return {
+    startsAt,
+    endsAt,
+    ...(item.location_text ? { location: item.location_text } : {})
+  };
 }
 
 export function parseMagicProTourSchedule(
@@ -628,56 +732,6 @@ function toMagicProTourCandidates(
       }
     };
   });
-}
-
-function isCurrentCrossFitGamesCompetition(competition: CrossFitCompetition) {
-  return (
-    competition.active === true &&
-    competition.type === "finals" &&
-    competition.slug === "finals" &&
-    typeof competition.start_date === "string" &&
-    typeof competition.end_date === "string"
-  );
-}
-
-function isCurrentOrFutureCompetition(
-  competition: CrossFitCompetition,
-  now: Date
-) {
-  if (!competition.end_date) {
-    return false;
-  }
-
-  const endsAt = new Date(competition.end_date);
-  return Number.isFinite(endsAt.getTime()) && endsAt >= now;
-}
-
-function toCrossFitGamesCandidate(
-  competition: CrossFitCompetition,
-  sourceUrl: string
-): EventCandidate {
-  const year = competition.year ?? new Date(competition.start_date ?? "").getUTCFullYear();
-  const title = normaliseTitle(`${year} CrossFit Games`);
-  const startsAt = new Date(competition.start_date ?? "").toISOString();
-  const endsAt = new Date(competition.end_date ?? "").toISOString();
-
-  return {
-    id: `crossfit_games:${slugify(`${competition.identifier ?? competition.id}:${startsAt}`)}`,
-    title,
-    startsAt,
-    endsAt,
-    source: "crossfit_games",
-    sourceUrl,
-    audience: ["Family"],
-    metadata: {
-      competitionId: competition.id ?? null,
-      competitionIdentifier: competition.identifier ?? null,
-      competitionName: competition.competition_name ?? competition.name ?? null,
-      competitionNameShort: competition.competition_name_short ?? null,
-      slug: competition.slug ?? null,
-      type: competition.type ?? null
-    }
-  };
 }
 
 export function parseSpringboksMatchCentre(

@@ -60,7 +60,10 @@ export function createWatsonDbFromClient(client: SupabaseClient) {
         .select(
           "id,title,starts_at,ends_at,source,source_url,audience,importance,action,calendar_event_id,metadata,created_at,updated_at"
         )
-        .gte("starts_at", from.toISOString())
+        // Include events that have already started but have not finished yet.
+        .or(
+          `starts_at.gte.${from.toISOString()},ends_at.gte.${from.toISOString()}`
+        )
         .order("starts_at", { ascending: true });
 
       if (error) {
