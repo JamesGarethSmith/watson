@@ -34,6 +34,11 @@ pnpm worker:dev
 `wrangler` and `vercel` are installed as project dev dependencies, so use them
 through `pnpm` or package scripts rather than global installs.
 
+The events homepage is public and does not require a login. Apply
+`supabase/migrations/20260906000000_public_event_read_access.sql` before deploying
+the web change so anonymous visitors can read events. Public database access is
+read-only; ingestion still uses its existing privileged credentials.
+
 ## Worker configuration
 
 The DStv/SuperSport enricher needs no credentials. To enable YouTube livestream

@@ -316,6 +316,7 @@ interface CrossFitSchedule {
   name?: string;
   competition_identifier?: string;
   blocks?: Array<{
+    headline_text?: string;
     items?: CrossFitScheduleItem[];
   }>;
 }
@@ -525,39 +526,50 @@ export function parseCrossFitGamesSchedule(
     return [];
   }
 
-  const events = (schedule.blocks ?? [])
-    .flatMap((block) => block.items ?? [])
-    .map(toDatedCrossFitScheduleItem)
-    .filter((item): item is DatedCrossFitScheduleItem => item !== undefined);
+  const datedBlocks = (schedule.blocks ?? [])
+    .map((block, index) => ({
+      day: block.headline_text?.trim() || `Day ${index + 1}`,
+      events: (block.items ?? [])
+        .map(toDatedCrossFitScheduleItem)
+        .filter(
+          (item): item is DatedCrossFitScheduleItem => item !== undefined
+        )
+    }))
+    .filter((block) => block.events.length > 0);
 
-  if (events.length === 0) {
+  if (datedBlocks.length === 0) {
     return [];
   }
 
-  const startsAt = new Date(
-    Math.min(...events.map((event) => event.startsAt.getTime()))
-  );
-  const endsAt = new Date(
-    Math.max(...events.map((event) => event.endsAt.getTime()))
-  );
-
-  if (endsAt < now) {
-    return [];
-  }
-
-  const year = startsAt.getUTCFullYear();
-  const locations = [
-    ...new Set(
-      events
-        .map((event) => event.location)
-        .filter((location): location is string => Boolean(location))
-        .map((location) => location.trim())
+  const year = Math.min(
+    ...datedBlocks.flatMap((block) =>
+      block.events.map((event) => event.startsAt.getUTCFullYear())
     )
-  ];
+  );
 
-  return [
-    {
-      id: `crossfit_games:${year}`,
+  return datedBlocks.flatMap(({ day, events }, dayIndex) => {
+    const startsAt = new Date(
+      Math.min(...events.map((event) => event.startsAt.getTime()))
+    );
+    const endsAt = new Date(
+      Math.max(...events.map((event) => event.endsAt.getTime()))
+    );
+
+    if (endsAt < now) {
+      return [];
+    }
+
+    const locations = [
+      ...new Set(
+        events
+          .map((event) => event.location)
+          .filter((location): location is string => Boolean(location))
+          .map((location) => location.trim())
+      )
+    ];
+
+    return [{
+      id: `crossfit_games:${year}:${slugify(day)}`,
       title: normaliseTitle(`${year} CrossFit Games`),
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
@@ -567,11 +579,13 @@ export function parseCrossFitGamesSchedule(
       metadata: {
         year,
         competitionIdentifier: schedule.competition_identifier ?? null,
+        competitionDay: day,
+        competitionDayNumber: dayIndex + 1,
         eventCount: events.length,
         locations: locations.join("; ")
       }
-    }
-  ];
+    }];
+  });
 }
 
 interface DatedCrossFitScheduleItem {

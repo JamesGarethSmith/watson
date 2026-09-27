@@ -21,7 +21,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <section className="login-card">
         <p className="eyebrow">Family calendar</p>
         <h1>Welcome back</h1>
-        <p className="intro">Sign in to see what&rsquo;s coming up.</p>
+        <p className="intro">
+          Events are public. <a href="/">See what&rsquo;s coming up</a> without
+          signing in.
+        </p>
 
         <form action={login} className="login-form">
           <label>

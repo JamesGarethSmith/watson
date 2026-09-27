@@ -1,7 +1,4 @@
-import { createWatsonDbFromClient, type ScheduledEvent } from "@watson/db";
-import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "../lib/supabase/server";
-import { logout } from "./auth-actions";
+import { createWatsonDb, type ScheduledEvent } from "@watson/db";
 
 export const dynamic = "force-dynamic";
 
@@ -107,15 +104,8 @@ async function getEvents() {
     return { events: [], status: "unconfigured" as const };
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { data } = await supabase.auth.getClaims();
-
-  if (!data?.claims) {
-    redirect("/login");
-  }
-
   try {
-    const db = createWatsonDbFromClient(supabase);
+    const db = createWatsonDb({ supabaseUrl, supabaseKey });
     return { events: await db.listUpcomingEvents(), status: "ready" as const };
   } catch (error) {
     console.error("Unable to load upcoming events", error);
@@ -144,9 +134,6 @@ export default async function HomePage() {
               <span>{events.length === 1 ? "event" : "events"}</span>
             </div>
           )}
-          <form action={logout} className="logout-form">
-            <button type="submit">Sign out</button>
-          </form>
         </header>
 
         {status === "unconfigured" && (
