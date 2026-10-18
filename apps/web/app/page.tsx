@@ -1,4 +1,5 @@
-import { createWatsonDb, type ScheduledEvent } from "@watson/db";
+import { createWatsonDb, isEventLive, type ScheduledEvent } from "@watson/db";
+import LiveRefresh from "./live-refresh";
 
 export const dynamic = "force-dynamic";
 
@@ -116,9 +117,11 @@ async function getEvents() {
 export default async function HomePage() {
   const { events, status } = await getEvents();
   const groups = groupByDate(events);
+  const now = new Date();
 
   return (
     <main>
+      <LiveRefresh />
       <div className="dashboard">
         <header className="hero">
           <div>
@@ -169,18 +172,24 @@ export default async function HomePage() {
                 <div className="event-list">
                   {dateEvents.map((event) => {
                     const highlight = highlightLabel(event);
+                    const live = isEventLive(event, now);
                     const dstvChannels = metadataString(event, "dstvChannels");
                     const youtubeUrl = metadataString(event, "youtubeUrl");
 
                     return (
                       <article
-                        className={`event${highlight ? " event-highlighted" : ""}`}
+                        className={[
+                          "event",
+                          highlight && "event-highlighted",
+                          live && "event-live"
+                        ].filter(Boolean).join(" ")}
                         key={event.id}
                       >
                         <time dateTime={event.startsAt}>
                           {formatTime(event.startsAt)}
                         </time>
                         <div className="event-details">
+                          {live && <span className="live-label">Live now</span>}
                           {highlight && (
                             <span className="highlight-label">{highlight}</span>
                           )}

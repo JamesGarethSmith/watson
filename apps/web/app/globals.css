@@ -136,6 +136,32 @@ h1 {
   padding-right: 16px;
 }
 
+.event-live {
+  border-left: 4px solid #b1482b;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.live-label {
+  align-items: center;
+  color: #a33e28;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 7px;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.live-label::before {
+  background: currentColor;
+  border-radius: 50%;
+  content: "";
+  height: 7px;
+  width: 7px;
+}
+
 .highlight-label {
   color: #9a6515;
   display: block;

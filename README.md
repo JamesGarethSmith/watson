@@ -34,6 +34,12 @@ pnpm worker:dev
 `wrangler` and `vercel` are installed as project dev dependencies, so use them
 through `pnpm` or package scripts rather than global installs.
 
+## Deployment
+
+Pushing `main` deploys the web app to Vercel. Deploy the ingestion Worker
+separately from the same checkout with `pnpm --filter @watson/worker deploy`.
+The Worker deploy requires a valid Wrangler login or `CLOUDFLARE_API_TOKEN`.
+
 The events homepage is public and does not require a login. Apply
 `supabase/migrations/20260906000000_public_event_read_access.sql` before deploying
 the web change so anonymous visitors can read events. Public database access is

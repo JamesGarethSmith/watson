@@ -20,6 +20,34 @@ export interface ScheduledEvent extends EventCandidate {
   updatedAt: string;
 }
 
+// Use the source's typical runtime when it does not provide an end time.
+const minuteMs = 60 * 1000;
+const defaultDurationMs = 180 * minuteMs;
+const estimatedDurationsMs: Partial<Record<EventSource, number>> = {
+  premier_league: (90 + 15 + 10) * minuteMs,
+  champions_league: (90 + 15 + 10) * minuteMs,
+  springboks: (80 + 15 + 10) * minuteMs
+};
+const maximumEstimatedDurationMs = Math.max(
+  defaultDurationMs,
+  ...Object.values(estimatedDurationsMs)
+);
+
+function eventEnd(event: Pick<EventCandidate, "startsAt" | "endsAt" | "source">): number {
+  return event.endsAt
+    ? new Date(event.endsAt).getTime()
+    : new Date(event.startsAt).getTime() +
+        (estimatedDurationsMs[event.source] ?? defaultDurationMs);
+}
+
+export function isEventLive(
+  event: Pick<EventCandidate, "startsAt" | "endsAt" | "source">,
+  now = new Date()
+): boolean {
+  const time = now.getTime();
+  return new Date(event.startsAt).getTime() <= time && time < eventEnd(event);
+}
+
 interface EventCandidateRow {
   id: string;
   title: string;
@@ -55,14 +83,15 @@ export function createWatsonDbFromClient(client: SupabaseClient) {
     },
 
     async listUpcomingEvents(from = new Date()): Promise<ScheduledEvent[]> {
+      const cutoff = new Date(from.getTime() - maximumEstimatedDurationMs);
       const { data, error } = await client
         .from("event_candidates")
         .select(
           "id,title,starts_at,ends_at,source,source_url,audience,importance,action,calendar_event_id,metadata,created_at,updated_at"
         )
-        // Include events that have already started but have not finished yet.
+        // Also fetch events without an end time that may still be underway.
         .or(
-          `starts_at.gte.${from.toISOString()},ends_at.gte.${from.toISOString()}`
+          `starts_at.gte.${cutoff.toISOString()},ends_at.gt.${from.toISOString()}`
         )
         .order("starts_at", { ascending: true });
 
@@ -70,23 +99,28 @@ export function createWatsonDbFromClient(client: SupabaseClient) {
         throw error;
       }
 
-      return ((data ?? []) as EventCandidateRow[]).map((row) => ({
-        id: row.id,
-        title: row.title,
-        startsAt: row.starts_at,
-        ...(row.ends_at ? { endsAt: row.ends_at } : {}),
-        source: row.source,
-        ...(row.source_url ? { sourceUrl: row.source_url } : {}),
-        audience: row.audience,
-        importance: row.importance,
-        action: row.action,
-        ...(row.calendar_event_id
-          ? { calendarEventId: row.calendar_event_id }
-          : {}),
-        metadata: row.metadata ?? {},
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-      }));
+      return ((data ?? []) as EventCandidateRow[])
+        .map((row) => ({
+          id: row.id,
+          title: row.title,
+          startsAt: row.starts_at,
+          ...(row.ends_at ? { endsAt: row.ends_at } : {}),
+          source: row.source,
+          ...(row.source_url ? { sourceUrl: row.source_url } : {}),
+          audience: row.audience,
+          importance: row.importance,
+          action: row.action,
+          ...(row.calendar_event_id
+            ? { calendarEventId: row.calendar_event_id }
+            : {}),
+          metadata: row.metadata ?? {},
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        }))
+        .filter((event) =>
+          new Date(event.startsAt).getTime() > from.getTime() ||
+          eventEnd(event) > from.getTime()
+        );
     },
 
     async saveEventCandidate(
